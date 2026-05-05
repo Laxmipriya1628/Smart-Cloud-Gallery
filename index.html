@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Smart Cloud Gallery</title>
+
+<style>
+:root{
+  --bg1:#0f0c29;
+  --bg2:#302b63;
+  --bg3:#24243e;
+  --card:rgba(255,255,255,0.08);
+}
+
+body{
+  margin:0;
+  font-family:Segoe UI;
+  overflow-x:hidden;
+  color:white;
+  background:linear-gradient(-45deg,var(--bg1),var(--bg2),var(--bg3));
+  background-size:400% 400%;
+  animation:bg 10s infinite;
+}
+
+@keyframes bg{
+  0%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+
+/* 🟣 3D CANVAS BACKGROUND */
+#scene3d{
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  z-index:-2;
+}
+
+/* GLASS HEADER */
+h1{
+  text-align:center;
+  padding:15px;
+  margin:0;
+  background:rgba(0,0,0,0.35);
+  backdrop-filter:blur(12px);
+}
+
+/* TOOLBAR */
+.toolbar{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  padding:10px;
+  flex-wrap:wrap;
+}
+
+input,select{
+  padding:8px;
+  border:none;
+  border-radius:8px;
+}
+
+/* BUTTONS */
+button{
+  padding:8px 12px;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+  background:linear-gradient(45deg,#ff4b1f,#ff9068);
+  color:white;
+  transition:0.3s;
+}
+button:hover{transform:scale(1.05)}
+
+/* GRID */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:15px;
+  padding:20px;
+}
+
+/* GLASS CARD */
+.card{
+  background:rgba(255,255,255,0.08);
+  backdrop-filter:blur(12px);
+  border-radius:12px;
+  padding:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.4);
+  transition:0.3s;
+}
+.card:hover{
+  transform:translateY(-6px) scale(1.04);
+}
+
+img{
+  width:100%;
+  height:140px;
+  object-fit:cover;
+  border-radius:10px;
+}
+
+/* 3D WALL */
+.wall{
+  perspective:1200px;
+  display:flex;
+  overflow-x:auto;
+  gap:10px;
+  padding:20px;
+}
+.wall .card{
+  transform:rotateY(15deg);
+  min-width:160px;
+}
+
+/* PREVIEW */
+#preview{
+  position:fixed;
+  top:0;left:0;
+  width:100%;height:100%;
+  background:#000c;
+  display:none;
+  justify-content:center;
+  align-items:center;
+}
+#preview img{
+  max-width:80%;
+  border-radius:10px;
+}
+
+/* LOADER */
+#loader{
+  position:fixed;
+  top:0;left:0;
+  width:100%;
+  height:100%;
+  background:#000b;
+  display:none;
+  justify-content:center;
+  align-items:center;
+}
+</style>
+</head>
+
+<body>
+
+<!-- 🌌 3D BACKGROUND -->
+<canvas id="scene3d"></canvas>
+
+<h1>☁️ Smart Cloud Gallery 2026</h1>
+
+<div class="toolbar">
+  <input type="file" id="file">
+
+  <select id="category">
+    <option>Nature</option>
+    <option>Tech</option>
+    <option>Travel</option>
+    <option>Other</option>
+  </select>
+
+  <button onclick="upload()">Upload</button>
+  <input id="search" placeholder="Search..." onkeyup="smartSearch()">
+</div>
+
+<h3 style="text-align:center;">🧠 Smart Wall</h3>
+<div class="wall" id="wall"></div>
+
+<h3 style="text-align:center;">⭐ Favorites</h3>
+<div class="grid" id="fav"></div>
+
+<h3 style="text-align:center;">📁 Gallery</h3>
+<div class="grid" id="gallery"></div>
+
+<div id="preview" onclick="this.style.display='none'">
+  <img id="previewImg">
+</div>
+
+<div id="loader">Uploading...</div>
+
+<script>
+let images = JSON.parse(localStorage.getItem("elite")) || [];
+render();
+
+/* ---------- UPLOAD ---------- */
+async function upload(){
+  let file=document.getElementById("file").files[0];
+  if(!file) return alert("Select file");
+
+  document.getElementById("loader").style.display="flex";
+
+  let fd=new FormData();
+  fd.append("file",file);
+  fd.append("upload_preset","gallery_upload");
+
+  let res=await fetch("https://api.cloudinary.com/v1_1/dsavlfphz/image/upload",{
+    method:"POST",
+    body:fd
+  });
+
+  let data=await res.json();
+
+  images.push({
+    url:data.secure_url,
+    category:aiTag(file.name),
+    favorite:false
+  });
+
+  localStorage.setItem("elite",JSON.stringify(images));
+
+  document.getElementById("loader").style.display="none";
+  render();
+}
+
+/* ---------- TAG ---------- */
+function aiTag(name){
+  name=name.toLowerCase();
+  if(name.includes("tree")) return "Nature";
+  if(name.includes("code")) return "Tech";
+  if(name.includes("road")) return "Travel";
+  return "Other";
+}
+
+/* ---------- FAVORITE ---------- */
+function fav(i){
+  images[i].favorite=!images[i].favorite;
+  localStorage.setItem("elite",JSON.stringify(images));
+  render();
+}
+
+/* ---------- DELETE ---------- */
+function del(i){
+  images.splice(i,1);
+  localStorage.setItem("elite",JSON.stringify(images));
+  render();
+}
+
+/* ---------- SEARCH ---------- */
+function smartSearch(){
+  let v=document.getElementById("search").value.toLowerCase();
+  document.querySelectorAll(".card").forEach(c=>{
+    c.style.display=c.innerText.toLowerCase().includes(v)?"block":"none";
+  });
+}
+
+/* ---------- RENDER ---------- */
+function render(){
+  let g=document.getElementById("gallery");
+  let w=document.getElementById("wall");
+  let f=document.getElementById("fav");
+
+  g.innerHTML="";
+  w.innerHTML="";
+  f.innerHTML="";
+
+  images.forEach((img,i)=>{
+    let card=document.createElement("div");
+    card.className="card";
+
+    card.innerHTML=`
+      <img src="${img.url}" onclick="preview('${img.url}')">
+      <p>${img.category}</p>
+
+      <button onclick="fav(${i})">${img.favorite?"⭐":"☆"}</button>
+      <button onclick="del(${i})">🗑</button>
+    `;
+
+    g.appendChild(card);
+    w.appendChild(card.cloneNode(true));
+
+    if(img.favorite){
+      f.appendChild(card.cloneNode(true));
+    }
+  });
+}
+
+/* ---------- PREVIEW ---------- */
+function preview(url){
+  document.getElementById("preview").style.display="flex";
+  document.getElementById("previewImg").src=url;
+}
+
+/* ---------- 3D CLOUD ENGINE (SIMPLE PARTICLE SPACE) ---------- */
+const canvas=document.getElementById("scene3d");
+const ctx=canvas.getContext("2d");
+
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+
+let particles=[];
+
+for(let i=0;i<80;i++){
+  particles.push({
+    x:Math.random()*canvas.width,
+    y:Math.random()*canvas.height,
+    r:Math.random()*3,
+    dx:(Math.random()-0.5)*0.5,
+    dy:(Math.random()-0.5)*0.5
+  });
+}
+
+function animate(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  for(let p of particles){
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle="rgba(255,255,255,0.5)";
+    ctx.fill();
+
+    p.x+=p.dx;
+    p.y+=p.dy;
+
+    if(p.x<0||p.x>canvas.width)p.dx*=-1;
+    if(p.y<0||p.y>canvas.height)p.dy*=-1;
+  }
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+
+</body>
+</html>
